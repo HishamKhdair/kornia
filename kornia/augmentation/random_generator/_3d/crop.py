@@ -51,10 +51,14 @@ class CropGenerator3D(RandomGeneratorBase):
         _common_param_check(batch_size, same_on_batch)
         _device, _dtype = _extract_device_dtype([self.size if isinstance(self.size, torch.Tensor) else None])
 
-        if not isinstance(self.size, torch.Tensor):
-            size = torch.tensor(self.size, device=_device, dtype=_dtype).repeat(batch_size, 1)
-        else:
-            size = self.size.to(device=_device, dtype=_dtype)
+        size = (
+            self.size.to(device=_device, dtype=_dtype)
+            if isinstance(self.size, torch.Tensor)
+            else torch.tensor(self.size, device=_device, dtype=_dtype).repeat(
+                batch_size, 1
+            )
+        )
+
         if size.shape != torch.Size([batch_size, 3]):
             raise AssertionError(
                 "If `size` is a tensor, it must be shaped as (B, 3). "
@@ -106,8 +110,7 @@ class CropGenerator3D(RandomGeneratorBase):
                 size[:, 1] - 1,
                 size[:, 0] - 1,
             )
-        else:
-            if not (
+        elif (
                 len(self.resize_to) == 3
                 and isinstance(self.resize_to[0], (int,))
                 and isinstance(self.resize_to[1], (int,))
@@ -116,7 +119,6 @@ class CropGenerator3D(RandomGeneratorBase):
                 and self.resize_to[1] > 0
                 and self.resize_to[2] > 0
             ):
-                raise AssertionError(f"`resize_to` must be a tuple of 3 positive integers. Got {self.resize_to}.")
             crop_dst = torch.tensor(
                 [
                     [
@@ -134,6 +136,8 @@ class CropGenerator3D(RandomGeneratorBase):
                 dtype=_dtype,
             ).repeat(batch_size, 1, 1)
 
+        else:
+            raise AssertionError(f"`resize_to` must be a tuple of 3 positive integers. Got {self.resize_to}.")
         return dict(src=crop_src.to(device=_device), dst=crop_dst.to(device=_device))
 
 
@@ -169,7 +173,7 @@ def center_crop_generator3d(
         type(depth) is int and depth > 0 and type(height) is int and height > 0 and type(width) is int and width > 0
     ):
         raise AssertionError(f"'depth', 'height' and 'width' must be integers. Got {depth}, {height}, {width}.")
-    if not (depth >= size[0] and height >= size[1] and width >= size[2]):
+    if depth < size[0] or height < size[1] or width < size[2]:
         raise AssertionError(f"Crop size must be smaller than input size. Got ({depth}, {height}, {width}) and {size}.")
 
     if batch_size == 0:
@@ -268,10 +272,14 @@ def random_crop_generator3d(
         The generated random numbers are not reproducible across different devices and dtypes.
     """
     _device, _dtype = _extract_device_dtype([size if isinstance(size, torch.Tensor) else None])
-    if not isinstance(size, torch.Tensor):
-        size = torch.tensor(size, device=device, dtype=dtype).repeat(batch_size, 1)
-    else:
-        size = size.to(device=device, dtype=dtype)
+    size = (
+        size.to(device=device, dtype=dtype)
+        if isinstance(size, torch.Tensor)
+        else torch.tensor(size, device=device, dtype=dtype).repeat(
+            batch_size, 1
+        )
+    )
+
     if size.shape != torch.Size([batch_size, 3]):
         raise AssertionError(
             "If `size` is a tensor, it must be shaped as (B, 3). "
@@ -293,7 +301,10 @@ def random_crop_generator3d(
     z_diff = input_size[0] - size[:, 0] + 1
 
     if (x_diff < 0).any() or (y_diff < 0).any() or (z_diff < 0).any():
-        raise ValueError(f"input_size {str(input_size)} cannot be smaller than crop size {str(size)} in any dimension.")
+        raise ValueError(
+            f"input_size {input_size} cannot be smaller than crop size {str(size)} in any dimension."
+        )
+
 
     if batch_size == 0:
         return dict(
@@ -329,8 +340,7 @@ def random_crop_generator3d(
             size[:, 1].to(device=_device, dtype=_dtype) - 1,
             size[:, 0].to(device=_device, dtype=_dtype) - 1,
         )
-    else:
-        if not (
+    elif (
             len(resize_to) == 3
             and isinstance(resize_to[0], (int,))
             and isinstance(resize_to[1], (int,))
@@ -339,7 +349,6 @@ def random_crop_generator3d(
             and resize_to[1] > 0
             and resize_to[2] > 0
         ):
-            raise AssertionError(f"`resize_to` must be a tuple of 3 positive integers. Got {resize_to}.")
         crop_dst = torch.tensor(
             [
                 [
@@ -357,4 +366,6 @@ def random_crop_generator3d(
             dtype=_dtype,
         ).repeat(batch_size, 1, 1)
 
+    else:
+        raise AssertionError(f"`resize_to` must be a tuple of 3 positive integers. Got {resize_to}.")
     return dict(src=crop_src.to(device=_device), dst=crop_dst.to(device=_device))

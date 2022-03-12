@@ -61,9 +61,8 @@ class SequentialBase(nn.Sequential):
                     mod.same_on_batch = same_on_batch
                 if keepdim is not None:
                     mod.keepdim = keepdim
-            if isinstance(mod, _AugmentationBase):
-                if return_transform is not None:
-                    mod.return_transform = return_transform
+            if isinstance(mod, _AugmentationBase) and return_transform is not None:
+                mod.return_transform = return_transform
             if isinstance(mod, SequentialBase):
                 mod.update_attribute(same_on_batch, return_transform, keepdim)
 
@@ -87,7 +86,7 @@ class SequentialBase(nn.Sequential):
                 path or resolves to something that is not an
                 ``nn.Module``
         """
-        if target == "":
+        if not target:
             return self
 
         atoms: List[str] = target.split(".")
@@ -96,12 +95,12 @@ class SequentialBase(nn.Sequential):
         for item in atoms:
 
             if not hasattr(mod, item):
-                raise AttributeError(mod._get_name() + " has no " "attribute `" + item + "`")
+                raise AttributeError(f'{mod._get_name()} has no attribute `{item}`')
 
             mod = getattr(mod, item)
 
             if not isinstance(mod, torch.nn.Module):
-                raise AttributeError("`" + item + "` is not " "an nn.Module")
+                raise AttributeError(f"`{item}` is not an nn.Module")
 
         return mod
 

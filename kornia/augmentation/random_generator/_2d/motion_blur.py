@@ -54,14 +54,13 @@ class MotionBlurGenerator(RandomGeneratorBase):
         self.direction = direction
 
     def __repr__(self) -> str:
-        repr = f"kernel_size={self.kernel_size}, angle={self.angle}, direction={self.direction}"
-        return repr
+        return f"kernel_size={self.kernel_size}, angle={self.angle}, direction={self.direction}"
 
     def make_samplers(self, device: torch.device, dtype: torch.dtype) -> None:
         angle = _range_bound(self.angle, 'angle', center=0.0, bounds=(-360, 360)).to(device=device, dtype=dtype)
         direction = _range_bound(self.direction, 'direction', center=0.0, bounds=(-1, 1)).to(device=device, dtype=dtype)
         if isinstance(self.kernel_size, int):
-            if not (self.kernel_size >= 3 and self.kernel_size % 2 == 1):
+            if self.kernel_size < 3 or self.kernel_size % 2 != 1:
                 raise AssertionError(f"`kernel_size` must be odd and greater than 3. Got {self.kernel_size}.")
             self.ksize_sampler = Uniform(self.kernel_size // 2, self.kernel_size // 2, validate_args=False)
         elif isinstance(self.kernel_size, tuple):
@@ -131,7 +130,7 @@ def random_motion_blur_generator(
     _device, _dtype = _extract_device_dtype([angle, direction])
 
     if isinstance(kernel_size, int):
-        if not (kernel_size >= 3 and kernel_size % 2 == 1):
+        if kernel_size < 3 or kernel_size % 2 != 1:
             raise AssertionError(f"`kernel_size` must be odd and greater than 3. Got {kernel_size}.")
         ksize_factor = torch.tensor([kernel_size] * batch_size, device=device, dtype=dtype)
     elif isinstance(kernel_size, tuple):

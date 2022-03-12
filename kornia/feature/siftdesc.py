@@ -27,8 +27,7 @@ def get_sift_pooling_kernel(ksize: int = 25) -> torch.Tensor:
     """
     ks_2: float = float(ksize) / 2.0
     xc2: torch.Tensor = ks_2 - (torch.arange(ksize).float() + 0.5 - ks_2).abs()  # type: ignore
-    kernel: torch.Tensor = torch.ger(xc2, xc2) / (ks_2 ** 2)
-    return kernel
+    return torch.ger(xc2, xc2) / (ks_2 ** 2)
 
 
 def get_sift_bin_ksize_stride_pad(patch_size: int, num_spatial_bins: int) -> Tuple:
@@ -142,14 +141,14 @@ class SIFTDescriptor(nn.Module):
     def forward(self, input):
         if not isinstance(input, torch.Tensor):
             raise TypeError(f"Input type is not a torch.Tensor. Got {type(input)}")
-        if not len(input.shape) == 4:
+        if len(input.shape) != 4:
             raise ValueError(f"Invalid input shape, we expect Bx1xHxW. Got: {input.shape}")
         B, CH, W, H = input.size()
         if (W != self.patch_size) or (H != self.patch_size) or (CH != 1):
             raise TypeError(
-                "input shape should be must be [Bx1x{}x{}]. "
-                "Got {}".format(self.patch_size, self.patch_size, input.size())
+                f"input shape should be must be [Bx1x{self.patch_size}x{self.patch_size}]. Got {input.size()}"
             )
+
         self.pk = self.pk.to(input.dtype).to(input.device)
 
         grads: torch.Tensor = spatial_gradient(input, 'diff')
@@ -170,7 +169,7 @@ class SIFTDescriptor(nn.Module):
         wo1_big: torch.Tensor = wo1_big_ * mag
 
         ang_bins = []
-        for i in range(0, self.num_ang_bins):
+        for i in range(self.num_ang_bins):
             out = self.pk((bo0_big == i).to(input.dtype) * wo0_big + (bo1_big == i).to(input.dtype) * wo1_big)
             ang_bins.append(out)
         ang_bins = torch.cat(ang_bins, dim=1)
@@ -269,11 +268,9 @@ class DenseSIFTDescriptor(nn.Module):
 
     def forward(self, input):
         if not isinstance(input, torch.Tensor):
-            raise TypeError("Input type is not a torch.Tensor. Got {}"
-                            .format(type(input)))
-        if not len(input.shape) == 4:
-            raise ValueError("Invalid input shape, we expect Bx1xHxW. Got: {}"
-                             .format(input.shape))
+            raise TypeError(f"Input type is not a torch.Tensor. Got {type(input)}")
+        if len(input.shape) != 4:
+            raise ValueError(f"Invalid input shape, we expect Bx1xHxW. Got: {input.shape}")
         B, CH, W, H = input.size()
         self.bin_pooling_kernel = self.bin_pooling_kernel.to(input.dtype).to(input.device)
         self.PoolingConv = self.PoolingConv.to(input.dtype).to(input.device)
@@ -292,7 +289,7 @@ class DenseSIFTDescriptor(nn.Module):
         wo0_big: torch.Tensor = (1.0 - wo1_big_) * mag  # type: ignore
         wo1_big: torch.Tensor = wo1_big_ * mag
         ang_bins = []
-        for i in range(0, self.num_ang_bins):
+        for i in range(self.num_ang_bins):
             out = self.bin_pooling_kernel((bo0_big == i).to(input.dtype) * wo0_big +  # noqa
                                           (bo1_big == i).to(input.dtype) * wo1_big)
             ang_bins.append(out)

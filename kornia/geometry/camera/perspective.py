@@ -29,13 +29,16 @@ def project_points(point_3d: torch.Tensor, camera_matrix: torch.Tensor) -> torch
     if not isinstance(camera_matrix, torch.Tensor):
         raise TypeError(f"Input camera_matrix type is not a torch.Tensor. Got {type(camera_matrix)}")
 
-    if not (point_3d.device == camera_matrix.device):
+    if point_3d.device != camera_matrix.device:
         raise ValueError("Input tensors must be all in the same device.")
 
-    if not point_3d.shape[-1] == 3:
-        raise ValueError("Input points_3d must be in the shape of (*, 3)." " Got {}".format(point_3d.shape))
+    if point_3d.shape[-1] != 3:
+        raise ValueError(
+            f"Input points_3d must be in the shape of (*, 3). Got {point_3d.shape}"
+        )
 
-    if not camera_matrix.shape[-2:] == (3, 3):
+
+    if camera_matrix.shape[-2:] != (3, 3):
         raise ValueError("Input camera_matrix must be in the shape of (*, 3, 3).")
 
     # projection eq. [u, v, w]' = K * [x y z 1]'
@@ -101,13 +104,19 @@ def unproject_points(
     if not (point_2d.device == depth.device == camera_matrix.device):
         raise ValueError("Input tensors must be all in the same device.")
 
-    if not point_2d.shape[-1] == 2:
-        raise ValueError("Input points_2d must be in the shape of (*, 2)." " Got {}".format(point_2d.shape))
+    if point_2d.shape[-1] != 2:
+        raise ValueError(
+            f"Input points_2d must be in the shape of (*, 2). Got {point_2d.shape}"
+        )
 
-    if not depth.shape[-1] == 1:
-        raise ValueError("Input depth must be in the shape of (*, 1)." " Got {}".format(depth.shape))
 
-    if not camera_matrix.shape[-2:] == (3, 3):
+    if depth.shape[-1] != 1:
+        raise ValueError(
+            f"Input depth must be in the shape of (*, 1). Got {depth.shape}"
+        )
+
+
+    if camera_matrix.shape[-2:] != (3, 3):
         raise ValueError("Input camera_matrix must be in the shape of (*, 3, 3).")
 
     # projection eq. K_inv * [u v 1]'

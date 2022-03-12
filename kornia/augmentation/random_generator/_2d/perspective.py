@@ -30,8 +30,7 @@ class PerspectiveGenerator(RandomGeneratorBase):
         self.distortion_scale = distortion_scale
 
     def __repr__(self) -> str:
-        repr = f"distortion_scale={self.distortion_scale}"
-        return repr
+        return f"distortion_scale={self.distortion_scale}"
 
     def make_samplers(self, device: torch.device, dtype: torch.dtype) -> None:
         self._distortion_scale = torch.as_tensor(self.distortion_scale, device=device, dtype=dtype)
@@ -50,7 +49,12 @@ class PerspectiveGenerator(RandomGeneratorBase):
 
         _device, _dtype = _extract_device_dtype([self.distortion_scale])
         _common_param_check(batch_size, same_on_batch)
-        if not (type(height) is int and height > 0 and type(width) is int and width > 0):
+        if (
+            type(height) is not int
+            or height <= 0
+            or type(width) is not int
+            or width <= 0
+        ):
             raise AssertionError(f"'height' and 'width' must be integers. Got {height}, {width}.")
 
         start_points: torch.Tensor = torch.tensor(
@@ -107,7 +111,12 @@ def random_perspective_generator(
     _common_param_check(batch_size, same_on_batch)
     if not (distortion_scale.dim() == 0 and 0 <= distortion_scale <= 1):
         raise AssertionError(f"'distortion_scale' must be a scalar within [0, 1]. Got {distortion_scale}.")
-    if not (type(height) is int and height > 0 and type(width) is int and width > 0):
+    if (
+        type(height) is not int
+        or height <= 0
+        or type(width) is not int
+        or width <= 0
+    ):
         raise AssertionError(f"'height' and 'width' must be integers. Got {height}, {width}.")
 
     start_points: torch.Tensor = torch.tensor(

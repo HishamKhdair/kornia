@@ -66,8 +66,7 @@ def get_laf_center(LAF: torch.Tensor) -> torch.Tensor:
         >>> output = get_laf_center(input)  # BxNx2
     """
     raise_error_if_laf_is_not_valid(LAF)
-    out: torch.Tensor = LAF[..., 2]
-    return out
+    return LAF[..., 2]
 
 
 def get_laf_orientation(LAF: torch.Tensor) -> torch.Tensor:
@@ -109,10 +108,13 @@ def set_laf_orientation(LAF: torch.Tensor, angles_degrees: torch.Tensor) -> torc
     raise_error_if_laf_is_not_valid(LAF)
     B, N = LAF.shape[:2]
     rotmat: torch.Tensor = angle_to_rotation_matrix(angles_degrees).view(B * N, 2, 2)
-    laf_out: torch.Tensor = torch.cat(
-        [torch.bmm(make_upright(LAF).view(B * N, 2, 3)[:, :2, :2], rotmat), LAF.view(B * N, 2, 3)[:, :2, 2:]], dim=2
+    return torch.cat(
+        [
+            torch.bmm(make_upright(LAF).view(B * N, 2, 3)[:, :2, :2], rotmat),
+            LAF.view(B * N, 2, 3)[:, :2, 2:],
+        ],
+        dim=2,
     ).view(B, N, 2, 3)
-    return laf_out
 
 
 def laf_from_center_scale_ori(xy: torch.Tensor, scale: torch.Tensor, ori: torch.Tensor) -> torch.Tensor:
@@ -131,17 +133,20 @@ def laf_from_center_scale_ori(xy: torch.Tensor, scale: torch.Tensor, ori: torch.
         if not isinstance(var, torch.Tensor):
             raise TypeError(f"{var_name} type is not a torch.Tensor. Got {type(var)}")
         if len(var.shape) != len(req_shape):  # type: ignore  # because it does not like len(tensor.shape)
-            raise TypeError("{} shape should be must be [{}]. " "Got {}".format(var_name, str(req_shape), var.size()))
+            raise TypeError(
+                f"{var_name} shape should be must be [{str(req_shape)}]. Got {var.size()}"
+            )
+
         for i, dim in enumerate(req_shape):  # type: ignore # because it wants typing for dim
             if dim is not int:
                 continue
             if var.size(i) != dim:
                 raise TypeError(
-                    "{} shape should be must be [{}]. " "Got {}".format(var_name, str(req_shape), var.size())
+                    f"{var_name} shape should be must be [{str(req_shape)}]. Got {var.size()}"
                 )
+
     unscaled_laf: torch.Tensor = torch.cat([angle_to_rotation_matrix(ori.squeeze(-1)), xy.unsqueeze(-1)], dim=-1)
-    laf: torch.Tensor = scale_laf(unscaled_laf, scale)
-    return laf
+    return scale_laf(unscaled_laf, scale)
 
 
 def scale_laf(laf: torch.Tensor, scale_coef: Union[float, torch.Tensor]) -> torch.Tensor:
@@ -167,7 +172,10 @@ def scale_laf(laf: torch.Tensor, scale_coef: Union[float, torch.Tensor]) -> torc
         >>> output = scale_laf(input, scale)  # BxNx2x3
     """
     if (type(scale_coef) is not float) and (type(scale_coef) is not torch.Tensor):
-        raise TypeError("scale_coef should be float or torch.Tensor " "Got {}".format(type(scale_coef)))
+        raise TypeError(
+            f"scale_coef should be float or torch.Tensor Got {type(scale_coef)}"
+        )
+
     raise_error_if_laf_is_not_valid(laf)
     centerless_laf: torch.Tensor = laf[:, :, :2, :2]
     return torch.cat([scale_coef * centerless_laf, laf[:, :, :, 2:]], dim=3)
@@ -233,10 +241,10 @@ def ellipse_to_laf(ells: torch.Tensor) -> torch.Tensor:
     """
     n_dims = len(ells.size())
     if n_dims != 3:
-        raise TypeError("ellipse shape should be must be [BxNx5]. " "Got {}".format(ells.size()))
+        raise TypeError(f"ellipse shape should be must be [BxNx5]. Got {ells.size()}")
     B, N, dim = ells.size()
     if dim != 5:
-        raise TypeError("ellipse shape should be must be [BxNx5]. " "Got {}".format(ells.size()))
+        raise TypeError(f"ellipse shape should be must be [BxNx5]. Got {ells.size()}")
     # Previous implementation was incorrectly using Cholesky decomp as matrix sqrt
     # ell_shape = torch.cat([torch.cat([ells[..., 2:3], ells[..., 3:4]], dim=2).unsqueeze(2),
     #                       torch.cat([ells[..., 3:4], ells[..., 4:5]], dim=2).unsqueeze(2)], dim=2).view(-1, 2, 2)
@@ -254,8 +262,7 @@ def ellipse_to_laf(ells: torch.Tensor) -> torch.Tensor:
     a22 = ells[..., 4:5].abs().sqrt()
     a21 = ells[..., 3:4] / (a11 + a22).clamp(1e-9)
     A = torch.stack([a11, a12, a21, a22], dim=-1).view(B, N, 2, 2).inverse()
-    out = torch.cat([A, ells[..., :2].view(B, N, 2, 1)], dim=3)
-    return out
+    return torch.cat([A, ells[..., :2].view(B, N, 2, 1)], dim=3)
 
 
 def laf_to_boundary_points(LAF: torch.Tensor, n_pts: int = 50) -> torch.Tensor:
@@ -428,10 +435,7 @@ def extract_patches_simple(
         patches with shape :math:`(B, N, CH, PS,PS)`.
     """
     raise_error_if_laf_is_not_valid(laf)
-    if normalize_lafs_before_extraction:
-        nlaf: torch.Tensor = normalize_laf(laf, img)
-    else:
-        nlaf = laf
+    nlaf = normalize_laf(laf, img) if normalize_lafs_before_extraction else laf
     _, ch, h, w = img.size()
     B, N, _, _ = laf.size()
     out = []
@@ -466,10 +470,7 @@ def extract_patches_from_pyramid(
         patches with shape :math:`(B, N, CH, PS,PS)`.
     """
     raise_error_if_laf_is_not_valid(laf)
-    if normalize_lafs_before_extraction:
-        nlaf: torch.Tensor = normalize_laf(laf, img)
-    else:
-        nlaf = laf
+    nlaf = normalize_laf(laf, img) if normalize_lafs_before_extraction else laf
     B, N, _, _ = laf.size()
     _, ch, h, w = img.size()
     scale = 2.0 * get_laf_scale(denormalize_laf(nlaf, img)) / float(PS)
@@ -533,8 +534,10 @@ def laf_to_three_points(laf: torch.Tensor):
         threepts :math:`(B, N, 2, 3)`.
     """
     raise_error_if_laf_is_not_valid(laf)
-    three_pts: torch.Tensor = torch.stack([laf[..., 2] + laf[..., 0], laf[..., 2] + laf[..., 1], laf[..., 2]], dim=-1)
-    return three_pts
+    return torch.stack(
+        [laf[..., 2] + laf[..., 0], laf[..., 2] + laf[..., 1], laf[..., 2]],
+        dim=-1,
+    )
 
 
 def laf_from_three_points(threepts: torch.Tensor):
@@ -548,10 +551,14 @@ def laf_from_three_points(threepts: torch.Tensor):
     Returns:
         laf :math:`(B, N, 2, 3)`.
     """
-    laf: torch.Tensor = torch.stack(
-        [threepts[..., 0] - threepts[..., 2], threepts[..., 1] - threepts[..., 2], threepts[..., 2]], dim=-1
+    return torch.stack(
+        [
+            threepts[..., 0] - threepts[..., 2],
+            threepts[..., 1] - threepts[..., 2],
+            threepts[..., 2],
+        ],
+        dim=-1,
     )
-    return laf
 
 
 def perspective_transform_lafs(trans_01: torch.Tensor, lafs_1: torch.Tensor) -> torch.Tensor:
@@ -601,13 +608,13 @@ def perspective_transform_lafs(trans_01: torch.Tensor, lafs_1: torch.Tensor) -> 
     if not torch.is_tensor(trans_01):
         raise TypeError("Input type is not a torch.Tensor")
 
-    if not trans_01.device == lafs_1.device:
+    if trans_01.device != lafs_1.device:
         raise TypeError("Tensor must be in the same device")
 
-    if not trans_01.shape[0] == lafs_1.shape[0]:
+    if trans_01.shape[0] != lafs_1.shape[0]:
         raise ValueError("Input batch size must be the same for both tensors")
 
-    if (not (trans_01.shape[-1] == 3)) or (not (trans_01.shape[-2] == 3)):
+    if trans_01.shape[-1] != 3 or trans_01.shape[-2] != 3:
         raise ValueError("Transformation should be homography")
 
     bs, n, _, _ = lafs_1.size()

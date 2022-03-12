@@ -56,10 +56,14 @@ class CropGenerator(RandomGeneratorBase):
             )
 
         input_size = (batch_shape[-2], batch_shape[-1])
-        if not isinstance(self.size, torch.Tensor):
-            size = torch.tensor(self.size, device=_device, dtype=_dtype).repeat(batch_size, 1)
-        else:
-            size = self.size.to(device=_device, dtype=_dtype)
+        size = (
+            self.size.to(device=_device, dtype=_dtype)
+            if isinstance(self.size, torch.Tensor)
+            else torch.tensor(self.size, device=_device, dtype=_dtype).repeat(
+                batch_size, 1
+            )
+        )
+
         if size.shape != torch.Size([batch_size, 2]):
             raise AssertionError(
                 "If `size` is a tensor, it must be shaped as (B, 2). "
@@ -173,8 +177,7 @@ class ResizedCropGenerator(CropGenerator):
         super().__init__(size=output_size, resize_to=self.output_size)  # fake an intermedia crop size
 
     def __repr__(self) -> str:
-        repr = f"scale={self.scale}, resize_to={self.ratio}, output_size={self.output_size}"
-        return repr
+        return f"scale={self.scale}, resize_to={self.ratio}, output_size={self.output_size}"
 
     def make_samplers(self, device: torch.device, dtype: torch.dtype) -> None:
         scale = torch.as_tensor(self.scale, device=device, dtype=dtype)
@@ -208,7 +211,7 @@ class ResizedCropGenerator(CropGenerator):
         w = torch.sqrt(area * aspect_ratio).round().floor()
         h = torch.sqrt(area / aspect_ratio).round().floor()
         # Element-wise w, h condition
-        cond = ((0 < w) * (w < size[0]) * (0 < h) * (h < size[1])).int()
+        cond = ((w > 0) * (w < size[0]) * (h > 0) * (h < size[1])).int()
 
         # torch.argmax is not reproducible across devices: https://github.com/pytorch/pytorch/issues/17738
         # Here, we will select the first occurrence of the duplicated elements.
@@ -308,16 +311,20 @@ def random_crop_generator(
     _device, _dtype = _extract_device_dtype([size if isinstance(size, torch.Tensor) else None])
     # Use float point instead
     _dtype = _dtype if _dtype in [torch.float16, torch.float32, torch.float64] else dtype
-    if not isinstance(size, torch.Tensor):
-        size = torch.tensor(size, device=_device, dtype=_dtype).repeat(batch_size, 1)
-    else:
-        size = size.to(device=_device, dtype=_dtype)
+    size = (
+        size.to(device=_device, dtype=_dtype)
+        if isinstance(size, torch.Tensor)
+        else torch.tensor(size, device=_device, dtype=_dtype).repeat(
+            batch_size, 1
+        )
+    )
+
     if size.shape != torch.Size([batch_size, 2]):
         raise AssertionError(
             "If `size` is a tensor, it must be shaped as (B, 2). "
             f"Got {size.shape} while expecting {torch.Size([batch_size, 2])}."
         )
-    if not (input_size[0] > 0 and input_size[1] > 0 and (size > 0).all()):
+    if input_size[0] <= 0 or input_size[1] <= 0 or not (size > 0).all():
         raise AssertionError(f"Got non-positive input size or size. {input_size}, {size}.")
     size = size.floor()
 
@@ -355,21 +362,21 @@ def random_crop_generator(
             size[:, 1],
             size[:, 0],
         )
-    else:
-        if not (
+    elif (
             len(resize_to) == 2
             and isinstance(resize_to[0], (int,))
             and isinstance(resize_to[1], (int,))
             and resize_to[0] > 0
             and resize_to[1] > 0
         ):
-            raise AssertionError(f"`resize_to` must be a tuple of 2 positive integers. Got {resize_to}.")
         crop_dst = torch.tensor(
             [[[0, 0], [resize_to[1] - 1, 0], [resize_to[1] - 1, resize_to[0] - 1], [0, resize_to[0] - 1]]],
             device=_device,
             dtype=_dtype,
         ).repeat(batch_size, 1, 1)
 
+    else:
+        raise AssertionError(f"`resize_to` must be a tuple of 2 positive integers. Got {resize_to}.")
     _input_size = torch.tensor(input_size, device=_device, dtype=torch.long).expand(batch_size, -1)
 
     return dict(src=crop_src, dst=crop_dst, input_size=_input_size)
@@ -413,7 +420,12 @@ def random_crop_size_generator(
     _common_param_check(batch_size, same_on_batch)
     _joint_range_check(scale, "scale")
     _joint_range_check(ratio, "ratio")
-    if not (len(size) == 2 and type(size[0]) is int and size[1] > 0 and type(size[1]) is int and size[1] > 0):
+    if (
+        len(size) != 2
+        or type(size[0]) is not int
+        or size[1] <= 0
+        or type(size[1]) is not int
+    ):
         raise AssertionError(f"'height' and 'width' must be integers. Got {size}.")
 
     _device, _dtype = _extract_device_dtype([scale, ratio])
@@ -431,7 +443,7 @@ def random_crop_size_generator(
     w = torch.sqrt(area * aspect_ratio).round().floor()
     h = torch.sqrt(area / aspect_ratio).round().floor()
     # Element-wise w, h condition
-    cond = ((0 < w) * (w < size[0]) * (0 < h) * (h < size[1])).int()
+    cond = ((w > 0) * (w < size[0]) * (h > 0) * (h < size[1])).int()
 
     # torch.argmax is not reproducible across devices: https://github.com/pytorch/pytorch/issues/17738
     # Here, we will select the first occurrence of the duplicated elements.
@@ -483,9 +495,14 @@ def center_crop_generator(
     _common_param_check(batch_size)
     if not isinstance(size, (tuple, list)) and len(size) == 2:
         raise ValueError(f"Input size must be a tuple/list of length 2. Got {size}")
-    if not (type(height) is int and height > 0 and type(width) is int and width > 0):
+    if (
+        type(height) is not int
+        or height <= 0
+        or type(width) is not int
+        or width <= 0
+    ):
         raise AssertionError(f"'height' and 'width' must be integers. Got {height}, {width}.")
-    if not (height >= size[0] and width >= size[1]):
+    if height < size[0] or width < size[1]:
         raise AssertionError(f"Crop size must be smaller than input size. Got ({height}, {width}) and {size}.")
 
     # unpack input sizes

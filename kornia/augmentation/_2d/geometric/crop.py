@@ -145,8 +145,10 @@ class RandomCrop(GeometricAugmentationBase2D):
 
     def compute_transformation(self, input: Tensor, params: Dict[str, Tensor]) -> Tensor:
         if self.flags["cropping_mode"] == "resample":
-            transform: Tensor = get_perspective_transform(params["src"].to(input), params["dst"].to(input))
-            return transform
+            return get_perspective_transform(
+                params["src"].to(input), params["dst"].to(input)
+            )
+
         if self.flags["cropping_mode"] == "slice":  # Skip the computation for slicing.
             return self.identity_matrix(input)
         raise NotImplementedError(f"Not supported type: {self.flags['cropping_mode']}.")
@@ -231,14 +233,13 @@ class RandomCrop(GeometricAugmentationBase2D):
             input_temp = _transform_input(input[0])
             input_pad = self.compute_padding(input[0].shape) if input_pad is None else input_pad
             _input = (self.precrop_padding(input_temp, input_pad), input[1])
-            _input = _transform_output_shape(_input, ori_shape) if self.keepdim else _input  # type:ignore
         else:
             input = cast(Tensor, input)  # TODO: weird that cast is not working under this context.
             ori_shape = input.shape
             input_temp = _transform_input(input)
             input_pad = self.compute_padding(input_temp.shape) if input_pad is None else input_pad
             _input = self.precrop_padding(input_temp, input_pad)  # type: ignore
-            _input = _transform_output_shape(_input, ori_shape) if self.keepdim else _input  # type:ignore
+        _input = _transform_output_shape(_input, ori_shape) if self.keepdim else _input  # type:ignore
         out = super().forward(_input, params)  # type:ignore
 
         # Update the actual input size for inverse
@@ -252,7 +253,7 @@ class RandomCrop(GeometricAugmentationBase2D):
             # undo the pre-crop if nothing happened.
             if isinstance(out, tuple) and isinstance(input, tuple):
                 return input[0], out[1]
-            if isinstance(out, tuple) and not isinstance(input, tuple):
+            if isinstance(out, tuple):
                 return input, out[1]
             return input
         return out

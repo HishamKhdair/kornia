@@ -28,20 +28,20 @@ def validate_bbox(boxes: torch.Tensor) -> bool:
             of Bx4x2, where each box is defined in the following ``clockwise`` order: top-left, top-right, bottom-right,
             bottom-left. The coordinates must be in the x, y order.
     """
-    if not (len(boxes.shape) == 3 and boxes.shape[1:] == torch.Size([4, 2])):
+    if len(boxes.shape) != 3 or boxes.shape[1:] != torch.Size([4, 2]):
         raise AssertionError(f"Box shape must be (B, 4, 2). Got {boxes.shape}.")
 
     if not torch.allclose((boxes[:, 1, 0] - boxes[:, 0, 0] + 1), (boxes[:, 2, 0] - boxes[:, 3, 0] + 1)):
         raise ValueError(
-            "Boxes must have be rectangular, while get widths %s and %s"
-            % (str(boxes[:, 1, 0] - boxes[:, 0, 0] + 1), str(boxes[:, 2, 0] - boxes[:, 3, 0] + 1))
+            f"Boxes must have be rectangular, while get widths {str(boxes[:, 1, 0] - boxes[:, 0, 0] + 1)} and {str(boxes[:, 2, 0] - boxes[:, 3, 0] + 1)}"
         )
+
 
     if not torch.allclose((boxes[:, 2, 1] - boxes[:, 0, 1] + 1), (boxes[:, 3, 1] - boxes[:, 1, 1] + 1)):
         raise ValueError(
-            "Boxes must have be rectangular, while get heights %s and %s"
-            % (str(boxes[:, 2, 1] - boxes[:, 0, 1] + 1), str(boxes[:, 3, 1] - boxes[:, 1, 1] + 1))
+            f"Boxes must have be rectangular, while get heights {str(boxes[:, 2, 1] - boxes[:, 0, 1] + 1)} and {str(boxes[:, 3, 1] - boxes[:, 1, 1] + 1)}"
         )
+
 
     return True
 
@@ -56,7 +56,7 @@ def validate_bbox3d(boxes: torch.Tensor) -> bool:
             front-bottom-right, front-bottom-left, back-top-left, back-top-right, back-bottom-right, back-bottom-left.
             The coordinates must be in the x, y, z order.
     """
-    if not (len(boxes.shape) == 3 and boxes.shape[1:] == torch.Size([8, 3])):
+    if len(boxes.shape) != 3 or boxes.shape[1:] != torch.Size([8, 3]):
         raise AssertionError(f"Box shape must be (B, 8, 3). Got {boxes.shape}.")
 
     left = torch.index_select(boxes, 1, torch.tensor([1, 2, 5, 6], device=boxes.device, dtype=torch.long))[:, :, 0]
@@ -313,9 +313,9 @@ def bbox_generator(
                  [3, 3],
                  [1, 3]]])
     """
-    if not (x_start.shape == y_start.shape and x_start.dim() in [0, 1]):
+    if x_start.shape != y_start.shape or x_start.dim() not in [0, 1]:
         raise AssertionError(f"`x_start` and `y_start` must be a scalar or (B,). Got {x_start}, {y_start}.")
-    if not (width.shape == height.shape and width.dim() in [0, 1]):
+    if width.shape != height.shape or width.dim() not in [0, 1]:
         raise AssertionError(f"`width` and `height` must be a scalar or (B,). Got {width}, {height}.")
     if not x_start.dtype == y_start.dtype == width.dtype == height.dtype:
         raise AssertionError(
@@ -460,7 +460,7 @@ def transform_bbox(
         raise ValueError(f"Mode must be one of 'xyxy', 'xywh'. Got {mode}")
 
     # (B, N, 4, 2) shaped polygon boxes do not need to be restored.
-    if restore_coordinates is None and not (boxes.shape[-2:] == torch.Size([4, 2])):
+    if restore_coordinates is None and boxes.shape[-2:] != torch.Size([4, 2]):
         warnings.warn(
             "Previous behaviour produces incorrect box coordinates if a flip transformation performed on boxes."
             "The previous wrong behaviour has been corrected and will be removed in the future versions."
@@ -476,7 +476,9 @@ def transform_bbox(
     transformed_boxes: torch.Tensor = transform_points(trans_mat, boxes.view(boxes.shape[0], -1, 2))
     transformed_boxes = transformed_boxes.view_as(boxes)
 
-    if (restore_coordinates is None or restore_coordinates) and not (boxes.shape[-2:] == torch.Size([4, 2])):
+    if ((restore_coordinates is None or restore_coordinates)) and boxes.shape[
+        -2:
+    ] != torch.Size([4, 2]):
         restored_boxes = transformed_boxes.clone()
         # In case the boxes are flipped, we ensure it is ordered like left-top -> right-bot points
         restored_boxes[..., 0] = torch.min(transformed_boxes[..., [0, 2]], dim=-1)[0]
@@ -545,6 +547,6 @@ def nms(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float) -> torc
         inds = torch.where(ovr <= iou_threshold)[0]
         order = order[inds + 1]
 
-    if len(keep) > 0:
+    if keep:
         return torch.stack(keep)
     return torch.tensor(keep)

@@ -153,7 +153,7 @@ class AugmentationSequential(ImageSequential):
 
         self.data_keys = [DataKey.get(inp) for inp in data_keys]
 
-        if not all(in_type in DataKey for in_type in self.data_keys):
+        if any(in_type not in DataKey for in_type in self.data_keys):
             raise AssertionError(f"`data_keys` must be in {DataKey}. Got {data_keys}.")
 
         if self.data_keys[0] != DataKey.INPUT:
@@ -317,21 +317,21 @@ class AugmentationSequential(ImageSequential):
         args = self._arguments_preproc(*args, data_keys=_data_keys)
 
         if params is None:
-            # image data must exist if params is not provided.
-            if DataKey.INPUT in _data_keys:
-                _input = args[_data_keys.index(DataKey.INPUT)]
-                inp = _input
-                if isinstance(inp, (tuple, list)):
-                    raise ValueError(f"`INPUT` should be a tensor but `{type(inp)}` received.")
-                # A video input shall be BCDHW while an image input shall be BCHW
-                if self.contains_video_sequential or self.contains_3d_augmentation:
-                    _, out_shape = self.autofill_dim(inp, dim_range=(3, 5))
-                else:
-                    _, out_shape = self.autofill_dim(inp, dim_range=(2, 4))
-                params = self.forward_parameters(out_shape)
-            else:
+            if DataKey.INPUT not in _data_keys:
                 raise ValueError("`params` must be provided whilst INPUT is not in data_keys.")
 
+            _input = args[_data_keys.index(DataKey.INPUT)]
+            inp = _input
+            if isinstance(inp, (tuple, list)):
+                raise ValueError(f"`INPUT` should be a tensor but `{type(inp)}` received.")
+                # A video input shall be BCDHW while an image input shall be BCHW
+            _, out_shape = (
+                self.autofill_dim(inp, dim_range=(3, 5))
+                if self.contains_video_sequential or self.contains_3d_augmentation
+                else self.autofill_dim(inp, dim_range=(2, 4))
+            )
+
+            params = self.forward_parameters(out_shape)
         outputs: List[Tensor] = [None] * len(_data_keys)  # type: ignore
         # Forward the first image data to freeze the parameters.
         if DataKey.INPUT in _data_keys:
@@ -351,11 +351,7 @@ class AugmentationSequential(ImageSequential):
             if out is not None:
                 continue
             # Using tensors straight-away
-            if isinstance(arg, (Boxes,)):
-                input = arg.data  # all boxes are in (B, N, 4, 2) format now.
-            else:
-                input = arg
-
+            input = arg.data if isinstance(arg, (Boxes,)) else arg
             for param in params:
                 module = self.get_submodule(param.name)
                 if dcate == DataKey.INPUT:

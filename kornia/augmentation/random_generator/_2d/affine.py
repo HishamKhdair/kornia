@@ -62,8 +62,7 @@ class AffineGenerator(RandomGeneratorBase):
         self.shear = shear
 
     def __repr__(self) -> str:
-        repr = f"degrees={self.degrees}, translate={self.translate}, scale={self.scale}, shear={self.shear}"
-        return repr
+        return f"degrees={self.degrees}, translate={self.translate}, scale={self.scale}, shear={self.shear}"
 
     def make_samplers(self, device: torch.device, dtype: torch.dtype) -> None:
         _degrees = _range_bound(self.degrees, 'degrees', 0, (-360, 360)).to(device=device, dtype=dtype)
@@ -243,7 +242,7 @@ def random_affine_generator(
     # compute tensor ranges
     if scale is not None:
         scale = scale.to(device=device, dtype=dtype)
-        if not (len(scale.shape) == 1 and len(scale) in (2, 4)):
+        if len(scale.shape) != 1 or len(scale) not in {2, 4}:
             raise AssertionError(f"`scale` shall have 2 or 4 elements. Got {scale}.")
         _joint_range_check(cast(torch.Tensor, scale[:2]), "scale")
         _scale = _adapted_uniform((batch_size,), scale[0], scale[1], same_on_batch).unsqueeze(1).repeat(1, 2)

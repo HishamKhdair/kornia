@@ -16,8 +16,9 @@ from .laf import (
     scale_laf,
 )
 
-urls: Dict[str, str] = {}
-urls["affnet"] = "https://github.com/ducha-aiki/affnet/raw/master/pretrained/AffNet.pth"
+urls: Dict[str, str] = {
+    "affnet": "https://github.com/ducha-aiki/affnet/raw/master/pretrained/AffNet.pth"
+}
 
 
 class PatchAffineShapeEstimator(nn.Module):
@@ -39,7 +40,12 @@ class PatchAffineShapeEstimator(nn.Module):
         self.weighting: torch.Tensor = get_gaussian_kernel2d((self.patch_size, self.patch_size), (sigma, sigma), True)
 
     def __repr__(self):
-        return self.__class__.__name__ + '(' 'patch_size=' + str(self.patch_size) + ', ' + 'eps=' + str(self.eps) + ')'
+        return (
+            f'{self.__class__.__name__}(patch_size={str(self.patch_size)}, '
+            + 'eps='
+            + str(self.eps)
+            + ')'
+        )
 
     def forward(self, patch: torch.Tensor) -> torch.Tensor:
         """Args:
@@ -48,14 +54,14 @@ class PatchAffineShapeEstimator(nn.Module):
             torch.Tensor: ellipse_shape shape [Bx1x3]"""
         if not isinstance(patch, torch.Tensor):
             raise TypeError(f"Input type is not a torch.Tensor. Got {type(patch)}")
-        if not len(patch.shape) == 4:
+        if len(patch.shape) != 4:
             raise ValueError(f"Invalid input shape, we expect Bx1xHxW. Got: {patch.shape}")
         _, CH, W, H = patch.size()
         if (W != self.patch_size) or (H != self.patch_size) or (CH != 1):
             raise TypeError(
-                "input shape should be must be [Bx1x{}x{}]. "
-                "Got {}".format(self.patch_size, self.patch_size, patch.size())
+                f"input shape should be must be [Bx1x{self.patch_size}x{self.patch_size}]. Got {patch.size()}"
             )
+
         self.weighting = self.weighting.to(patch.dtype).to(patch.device)
         grads: torch.Tensor = self.gradient(patch) * self.weighting
         # unpack the edges
@@ -223,5 +229,4 @@ class LAFAffNetShapeEstimator(nn.Module):
         new_laf = torch.cat([new_laf_no_center, laf[:, :, :, 2:3]], dim=3)
         scale_orig = get_laf_scale(laf)
         ellipse_scale = get_laf_scale(new_laf)
-        laf_out = scale_laf(make_upright(new_laf), scale_orig / ellipse_scale)
-        return laf_out
+        return scale_laf(make_upright(new_laf), scale_orig / ellipse_scale)
