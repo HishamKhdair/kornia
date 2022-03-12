@@ -21,13 +21,12 @@ def _merge_box_list(
         raise TypeError(
             f"Input boxes must be a list of (N, 4, 2) shaped. Got: {[box.shape for box in boxes]}.")
 
-    if method == "pad":
-        max_N = max(box.shape[0] for box in boxes)
-        stats = [max_N - box.shape[0] for box in boxes]
-        output = torch.nn.utils.rnn.pad_sequence(boxes, batch_first=True)
-    else:
+    if method != "pad":
         raise NotImplementedError(f"`{method}` is not implemented.")
 
+    max_N = max(box.shape[0] for box in boxes)
+    stats = [max_N - box.shape[0] for box in boxes]
+    output = torch.nn.utils.rnn.pad_sequence(boxes, batch_first=True)
     return output, stats
 
 
@@ -96,11 +95,9 @@ def _boxes_to_quadrilaterals(
     boxes = boxes if batched else boxes.unsqueeze(0)
 
     if mode.startswith("vertices"):
-        if mode == "vertices":
+        if mode in ["vertices", "vertices_plus"]:
             # Avoid passing reference
             quadrilaterals = boxes.clone()
-        elif mode == "vertices_plus":
-            quadrilaterals = boxes.clone()  # TODO: perform +1
         else:
             raise ValueError(f"Unknown mode {mode}")
         validate_boxes or validate_bbox(quadrilaterals)
@@ -157,8 +154,7 @@ def _boxes3d_to_polygons3d(
     back_vertices = front_vertices.clone()
     back_vertices[..., 2] += depth.unsqueeze(-1) - 1
 
-    polygons3d = torch.cat([front_vertices, back_vertices], dim=-2)
-    return polygons3d
+    return torch.cat([front_vertices, back_vertices], dim=-2)
 
 
 # NOTE: Cannot jit with Union types with torch <= 0.10
@@ -207,7 +203,7 @@ class Boxes:
         if not (3 <= boxes.ndim <= 4 and boxes.shape[-2:] == (4, 2)):
             raise ValueError(f"Boxes shape must be (N, 4, 2) or (B, N, 4, 2). Got {boxes.shape}.")
 
-        self._is_batched = False if boxes.ndim == 3 else True
+        self._is_batched = boxes.ndim != 3
 
         self._data = boxes
         self._mode = mode
@@ -349,8 +345,8 @@ class Boxes:
             boxes = _boxes_to_polygons(boxes[..., 0], boxes[..., 1], boxes[..., 2], boxes[..., 3])
 
         if self._N is not None and not as_padded_sequence:
-            boxes = list(torch.nn.functional.pad(
-                o, (len(o.shape) - 1) * [0, 0] + [0, - n]) for o, n in zip(boxes, self._N))
+            boxes = [torch.nn.functional.pad(
+                o, (len(o.shape) - 1) * [0, 0] + [0, - n]) for o, n in zip(boxes, self._N)]
         else:
             boxes = boxes if self._is_batched else boxes.squeeze(0)
         return boxes
@@ -498,7 +494,7 @@ class Boxes3D:
         if not (3 <= boxes.ndim <= 4 and boxes.shape[-2:] == (8, 3)):
             raise ValueError(f"3D bbox shape must be (N, 8, 3) or (B, N, 8, 3). Got {boxes.shape}.")
 
-        self._is_batched = False if boxes.ndim == 3 else True
+        self._is_batched = boxes.ndim != 3
 
         self._data = boxes
         self._mode = mode

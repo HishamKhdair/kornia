@@ -68,8 +68,11 @@ class RandomErasing(IntensityAugmentationBase2D):
         super().__init__(p=p, return_transform=return_transform, same_on_batch=same_on_batch, keepdim=keepdim)
         self.scale = scale
         self.ratio = ratio
-        self.value: float = float(value)
-        self._param_generator = cast(rg.RectangleEraseGenerator, rg.RectangleEraseGenerator(scale, ratio, float(value)))
+        self.value: float = value
+        self._param_generator = cast(
+            rg.RectangleEraseGenerator,
+            rg.RectangleEraseGenerator(scale, ratio, value),
+        )
 
     def apply_transform(
         self, input: Tensor, params: Dict[str, Tensor], transform: Optional[Tensor] = None
@@ -80,5 +83,4 @@ class RandomErasing(IntensityAugmentationBase2D):
         bboxes = bbox_generator(params["xs"], params["ys"], params["widths"], params["heights"])
         mask = bbox_to_mask(bboxes, w, h)  # Returns B, H, W
         mask = mask.unsqueeze(1).repeat(1, c, 1, 1).to(input)  # Transform to B, c, H, W
-        transformed = torch.where(mask == 1.0, values, input)
-        return transformed
+        return torch.where(mask == 1.0, values, input)

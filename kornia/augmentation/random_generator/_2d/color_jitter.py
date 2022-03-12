@@ -54,8 +54,7 @@ class ColorJitterGenerator(RandomGeneratorBase):
         self.hue = hue
 
     def __repr__(self) -> str:
-        repr = f"brightness={self.brightness}, contrast={self.contrast}, saturation={self.saturation}, hue={self.hue}"
-        return repr
+        return f"brightness={self.brightness}, contrast={self.contrast}, saturation={self.saturation}, hue={self.hue}"
 
     def make_samplers(self, device: torch.device, dtype: torch.dtype) -> None:
         brightness: torch.Tensor = _range_bound(

@@ -42,8 +42,7 @@ class RectangleEraseGenerator(RandomGeneratorBase):
         self.value = value
 
     def __repr__(self) -> str:
-        repr = f"scale={self.scale}, resize_to={self.ratio}, value={self.value}"
-        return repr
+        return f"scale={self.scale}, resize_to={self.ratio}, value={self.value}"
 
     def make_samplers(self, device: torch.device, dtype: torch.dtype) -> None:
         scale = torch.as_tensor(self.scale, device=device, dtype=dtype)
@@ -76,7 +75,12 @@ class RectangleEraseGenerator(RandomGeneratorBase):
         batch_size = batch_shape[0]
         height = batch_shape[-2]
         width = batch_shape[-1]
-        if not (type(height) is int and height > 0 and type(width) is int and width > 0):
+        if (
+            type(height) is not int
+            or height <= 0
+            or type(width) is not int
+            or width <= 0
+        ):
             raise AssertionError(f"'height' and 'width' must be integers. Got {height}, {width}.")
 
         _common_param_check(batch_size, same_on_batch)
@@ -174,9 +178,14 @@ def random_rectangles_params_generator(
     """
     _common_param_check(batch_size, same_on_batch)
     _device, _dtype = _extract_device_dtype([ratio, scale])
-    if not (type(height) is int and height > 0 and type(width) is int and width > 0):
+    if (
+        type(height) is not int
+        or height <= 0
+        or type(width) is not int
+        or width <= 0
+    ):
         raise AssertionError(f"'height' and 'width' must be integers. Got {height}, {width}.")
-    if not (isinstance(value, (int, float)) and value >= 0 and value <= 1):
+    if not isinstance(value, (int, float)) or value < 0 or value > 1:
         raise AssertionError(f"'value' must be a number between 0 - 1. Got {value}.")
     _joint_range_check(scale, 'scale', bounds=(0, float('inf')))
     _joint_range_check(ratio, 'ratio', bounds=(0, float('inf')))

@@ -30,8 +30,9 @@ keynet_config = {
         },
 }
 
-urls: Dict[str, str] = {}
-urls["keynet"] = "https://github.com/axelBarroso/Key.Net-Pytorch/raw/main/model/weights/keynet_pytorch.pth"
+urls: Dict[str, str] = {
+    "keynet": "https://github.com/axelBarroso/Key.Net-Pytorch/raw/main/model/weights/keynet_pytorch.pth"
+}
 
 
 class _FeatureExtractor(nn.Module):
@@ -47,8 +48,7 @@ class _FeatureExtractor(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         x_hc = self.hc_block(x)
-        x_lb = self.lb_block(x_hc)
-        return x_lb
+        return self.lb_block(x_hc)
 
 
 class _HandcraftedBlock(nn.Module):
@@ -68,7 +68,7 @@ class _HandcraftedBlock(nn.Module):
         sobel_dy = self.spatial_gradient(dy)
         dyy = sobel_dy[:, :, 1, :, :]
 
-        hc_feats = torch.cat([dx,
+        return torch.cat([dx,
                               dy,
                               dx ** 2.,
                               dy ** 2.,
@@ -78,8 +78,6 @@ class _HandcraftedBlock(nn.Module):
                               dxx,
                               dyy,
                               dxx * dyy], dim=1)
-
-        return hc_feats
 
 
 class _LearnableBlock(nn.Sequential):
@@ -160,13 +158,12 @@ class KeyNet(nn.Module):
         """
         shape_im = x.shape
         feats: List[Tensor] = [self.feature_extractor(x)]
-        for i in range(1, self.num_levels):
+        for _ in range(1, self.num_levels):
             x = pyrdown(x, factor=1.2)
             feats_i = self.feature_extractor(x)
             feats_i = F.interpolate(feats_i, size=(shape_im[2], shape_im[3]), mode='bilinear')
             feats.append(feats_i)
-        scores = self.last_conv(torch.cat(feats, dim=1))
-        return scores
+        return self.last_conv(torch.cat(feats, dim=1))
 
 
 class KeyNetDetector(nn.Module):
@@ -279,7 +276,11 @@ class KeyNetDetector(nn.Module):
 
             num_points_level = int(num_features_per_level[idx_level])
             if idx_level > 0 or (self.num_upscale_levels > 0):
-                nf2 = [num_features_per_level[a] for a in range(0, idx_level + 1 + self.num_upscale_levels)]
+                nf2 = [
+                    num_features_per_level[a]
+                    for a in range(idx_level + 1 + self.num_upscale_levels)
+                ]
+
                 res_points = Tensor(nf2).sum().item()
                 num_points_level = int(res_points)
 
